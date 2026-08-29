@@ -8,6 +8,9 @@ on:
       - "Cargo.toml"
       - "build.rs"
 
+permissions:
+  contents: write
+
 jobs:
   debug-build:
     runs-on: ubuntu-latest
@@ -17,10 +20,11 @@ jobs:
         run: |
           set -o pipefail
           cargo build --verbose --release 2>&1 | tee build.log || true
-      - name: Upload build log
+      - name: Publish build log as release asset
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-          if-no-files-found: ignore
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="debug-log-${{ github.run_id }}"
+          gh release create "$TAG" build.log --repo "$GITHUB_REPOSITORY" --title "Build log" || true
+          gh release upload "$TAG" build.log --repo "$GITHUB_REPOSITORY" --clobber || true
