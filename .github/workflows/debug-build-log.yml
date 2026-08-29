@@ -1,0 +1,26 @@
+name: Debug Build Log
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/debug-build-log.yml"
+      - "src/**"
+      - "Cargo.toml"
+      - "build.rs"
+
+jobs:
+  debug-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and capture output
+        run: |
+          set -o pipefail
+          cargo build --verbose --release 2>&1 | tee build.log || true
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore

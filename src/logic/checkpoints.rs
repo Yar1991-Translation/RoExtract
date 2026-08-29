@@ -307,17 +307,26 @@ pub fn create_checkpoint() -> Option<String> {
         return None;
     }
     let id = new_checkpoint_id();
-    let locale = locale::get_locale(None);
     let index = CHECKPOINTS.lock().unwrap().len() + 1;
-    let name = format!(
-        "{} {index}",
-        locale::get_message(&locale, "checkpoint-default-name", None)
-    );
+
+    // Status message before spawning the background snapshot (the bundle is
+    // created locally so nothing non-Send is moved into the thread).
+    let status_locale = locale::get_locale(None);
+    logic::update_status(locale::get_message(
+        &status_locale,
+        "checkpoint-creating",
+        None,
+    ));
 
     logic::set_task_running(true);
-    logic::update_status(locale::get_message(&locale, "checkpoint-creating", None));
 
     std::thread::spawn(move || {
+        let locale = locale::get_locale(None);
+        let name = format!(
+            "{} {index}",
+            locale::get_message(&locale, "checkpoint-default-name", None)
+        );
+
         let current = refresh_full_cache();
         let checkpoint = CacheCheckpoint {
             id: id.clone(),
@@ -327,7 +336,7 @@ pub fn create_checkpoint() -> Option<String> {
         };
         CHECKPOINTS.lock().unwrap().push(checkpoint);
         persist_checkpoints();
-        set_active_checkpoint(Some(id.clone()));
+        set_active_checkpoint(Some(id));
         set_current_cache(current);
         logic::set_task_running(false);
         logic::update_status(locale::get_message(&locale, "checkpoint-created", None));
