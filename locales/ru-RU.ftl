@@ -107,6 +107,7 @@ overwrite-with = Нажмите дважды на файл чтобы замен
 
 
 # Statuses
+deleted-files = Files deleted # TODO: Translate
 idling = Простаивает
 deleting-files = Удаление файлов ({ $item }/{ $total })
 reading-files = Чтение файлов ({ $item }/{ $total })

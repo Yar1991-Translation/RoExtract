@@ -148,3 +148,4 @@ button-change-rbx-storage-dir = Change rbx-storage Directory # TODO: Translate
 downloading-update = Downloading update… # TODO: Translate
 button-reset-rbx-storage-dir = Reset rbx-storage Directory # TODO: Translate
 no-directory = Not found # TODO: Translate
+deleted-files = Files deleted # TODO: Translate

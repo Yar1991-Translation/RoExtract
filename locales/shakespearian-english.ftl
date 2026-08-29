@@ -105,7 +105,8 @@ logs-description = These chronicles dost show how the program fareth. Should mis
 copy-choose-file = Double-tap a scroll to copy  
 overwrite-with = Double-tap a scroll to replace with "{ $asset }"  
 
-# Statuses  
+# Statuses
+deleted-files = Files deleted # TODO: Translate  
 idling = In a State of Idleness  
 deleting-files = Casting Scrolls into Oblivion ({ $item }/{ $total })  
 reading-files = Poring Over Scrolls ({ $item }/{ $total })  

@@ -106,6 +106,7 @@ custom-cache-dir-description = Jeżeli potrzebujesz dostęp do pamięci potrzebn
 use-alias-description = Zamiast eksportowania zwykłej nazwy dla zasobu, zaznaczenie tej opcji wyeksportuje zasób z inną nazwą pliku. Możesz zrobić to w tej aplikacji.
 
 # Statuses
+deleted-files = Files deleted # TODO: Translate
 swapped = Zamieniono { $item_a } z { $item_b }
 copied = Nadpisano { $item_b } z { $item_a }
 idling = Czuwanie

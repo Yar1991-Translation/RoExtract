@@ -112,6 +112,7 @@ reading-files = Reading files ({ $item }/{ $total })
 extracting-files = Extracting files ({ $item }/{ $total })
 filtering-files = Filtering files ({ $item }/{ $total })
 all-extracted = All files extracted
+deleted-files = Files deleted
 stage = Stage { $stage }/{ $max }: { $status }
 swapped = Swapped { $item_a } with { $item_b }
 copied = Overwritten { $item_b } with { $item_a }

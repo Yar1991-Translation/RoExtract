@@ -138,11 +138,13 @@ fn find_header(category: Category, bytes: &[u8]) -> Result<String, String> {
 }
 
 fn extract_bytes(header: &str, bytes: Vec<u8>) -> Vec<u8> {
-    // Set offset depending on header
+    // Set offset depending on header: how far before the locating string the
+    // file's signature actually starts (e.g. "WEBP" sits 8 bytes into RIFF).
     let offset: usize = match header {
         "PNG" => 1,
         "KTX" => 1,
         "WEBP" => 8,
+        "JFIF" => 6,
         _ => 0,
     };
 
@@ -301,6 +303,60 @@ pub fn refresh(category: Category, cli_list_mode: bool, yield_for_thread: bool) 
     }
 }
 
+/// Extension for a header string we recognise, e.g. "PNG" → "png".
+///
+/// Only used as a fallback for formats `detect_extension` is unable to
+/// identify from the extracted bytes (which normally start at the signature).
+fn extension_from_header(header: &str) -> Option<&'static str> {
+    match header {
+        "OggS" => Some("ogg"),
+        "ID3" => Some("mp3"),
+        "PNG" => Some("png"),
+        "WEBP" => Some("webp"),
+        "KTX" => Some("ktx"),
+        "<roblox!" => Some("rbxm"),
+        "JFIF" => Some("jpg"),
+        "GIF8" => Some("gif"),
+        "DDS " => Some("dds"),
+        _ => None,
+    }
+}
+
+/// Auto-detect a file extension from the magic bytes at the start of `bytes`.
+///
+/// Unlike the category headers, which are searched anywhere within the file
+/// (to tolerate wrappers around the asset), this matches the actual signature
+/// at the start, so it is safe to apply to unknown files as well.
+pub fn detect_extension(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("png")
+    } else if bytes.starts_with(b"RIFF") && bytes.len() >= 12 && &bytes[8..12] == b"WEBP" {
+        Some("webp")
+    } else if bytes.starts_with(b"RIFF") && bytes.len() >= 12 && &bytes[8..12] == b"WAVE" {
+        Some("wav")
+    } else if bytes.starts_with(b"OggS") {
+        Some("ogg")
+    } else if bytes.starts_with(b"ID3") {
+        Some("mp3")
+    } else if bytes.starts_with(b"fLaC") {
+        Some("flac")
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("jpg")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("gif")
+    } else if bytes.starts_with(b"\xABKTX 11\xBB") || bytes.starts_with(b"KTX") {
+        Some("ktx")
+    } else if bytes.starts_with(b"<roblox!") {
+        Some("rbxm")
+    } else if bytes.starts_with(b"DDS ") {
+        Some("dds")
+    } else if bytes.starts_with(b"BM") {
+        Some("bmp")
+    } else {
+        None
+    }
+}
+
 pub fn extract_to_file(
     asset: AssetInfo,
     destination: PathBuf,
@@ -311,27 +367,20 @@ pub fn extract_to_file(
     let bytes = read_asset(&asset)?;
 
     let header = find_header(asset.category, &bytes);
-    let extracted_bytes = match header {
-        Ok(header) => {
-            // Add the extension if needed
-            if add_extension {
-                let extension = match header.as_str() {
-                    "OggS" => "ogg",
-                    "ID3" => "mp3",
-                    "PNG" => "png",
-                    "WEBP" => "webp",
-                    "KTX" => "ktx",
-                    "<roblox!" => "rbxm",
-                    _ => "ogg",
-                };
-
-                destination.set_extension(extension);
-            }
-
-            extract_bytes(&header, bytes) // Extract between the header to the end of the file.
-        }
-        Err(_) => bytes, // No header found; write the raw bytes as-is.
+    let (extracted_bytes, header) = match header {
+        Ok(header) => (extract_bytes(&header, bytes), Some(header)),
+        Err(_) => (bytes, None), // No header found; write the raw bytes as-is.
     };
+
+    // Automatically apply the correct extension based on the file's magic
+    // bytes, with the header table as a fallback for formats we can't detect.
+    if add_extension {
+        let extension = detect_extension(&extracted_bytes)
+            .or_else(|| header.as_deref().and_then(extension_from_header));
+        if let Some(extension) = extension {
+            destination.set_extension(extension);
+        }
+    }
 
     // Ensure parent directory exists (needed when asset name contains subdirectories,
     // e.g. rbx-storage assets stored as "ab/abcdef...")
@@ -366,6 +415,88 @@ pub fn extract_asset_to_bytes(asset: AssetInfo) -> Result<Vec<u8>, std::io::Erro
     }
 }
 
+/// Folder name used to group extracted assets by their category.
+fn category_folder(category: Category) -> &'static str {
+    match category {
+        Category::Music => "music",
+        Category::Sounds => "sounds",
+        Category::Images => "images",
+        Category::Ktx => "ktx-files",
+        Category::Rbxm => "rbxm-files",
+        Category::All => "other",
+    }
+}
+
+/// The "No files to list." placeholder inserted by refreshes for empty
+/// directories has every `from_*` flag set to false.
+fn is_placeholder_asset(asset: &AssetInfo) -> bool {
+    !asset.from_file && !asset.from_sql && !asset.from_rbx_storage
+}
+
+/// Extract every asset in `file_list` into `destination`, optionally grouping
+/// each file into a subfolder named after its category (e.g. `/images`,
+/// `/sounds`).
+///
+/// The caller must already hold the `TASK_RUNNING` guard.
+fn extract_file_list(
+    destination: &std::path::Path,
+    file_list: &[AssetInfo],
+    use_alias: bool,
+    categorize: bool,
+) {
+    // Get locale for localised status messages
+    let locale = locale::get_locale(None);
+
+    // Get amount and initialise counter for progress
+    let total = file_list.len();
+    let mut count = 0;
+
+    for entry in file_list.iter() {
+        // Skip the "No files to list." placeholder, there is nothing to extract.
+        if is_placeholder_asset(entry) {
+            continue;
+        }
+
+        count += 1; // Increase counter for progress
+        update_progress(count as f32 / total.max(1) as f32); // Convert to f32 to allow floating point output
+
+        let alias = if use_alias {
+            config::get_asset_alias(&entry.name)
+        } else {
+            entry.name.clone()
+        };
+
+        let dest = if categorize {
+            destination.join(category_folder(entry.category)).join(alias)
+        } else {
+            destination.join(alias)
+        };
+
+        // Args for formatting
+        let mut args = FluentArgs::new();
+        args.set("item", count);
+        args.set("total", total);
+
+        match extract_to_file(entry.clone(), dest, true) {
+            Ok(_) => {
+                update_status(locale::get_message(
+                    &locale,
+                    "extracting-files",
+                    Some(&args),
+                ));
+            }
+            Err(e) => {
+                update_status(locale::get_message(
+                    &locale,
+                    "extracting-files",
+                    Some(&args),
+                ));
+                log_error!("Error extracting file ({}/{}): {}", count, total, e);
+            }
+        }
+    }
+}
+
 pub fn extract_dir(
     destination: PathBuf,
     category: Category,
@@ -396,52 +527,13 @@ pub fn extract_dir(
 
             let file_list = get_file_list();
 
-            // Get locale for localised status messages
-            let locale = locale::get_locale(None);
+            extract_file_list(&destination, &file_list, use_alias, false);
 
-            // Get amount and initialise counter for progress
-            let total = file_list.len();
-            let mut count = 0;
-
-            for entry in file_list.iter() {
-                count += 1; // Increase counter for progress
-                update_progress(count as f32 / total as f32); // Convert to f32 to allow floating point output
-
-                let alias = if use_alias {
-                    config::get_asset_alias(&entry.name)
-                } else {
-                    entry.name.clone()
-                };
-
-                let dest = destination.join(alias); // Local variable destination
-
-                // Args for formatting
-                let mut args = FluentArgs::new();
-                args.set("item", count);
-                args.set("total", total);
-
-                match extract_to_file(entry.clone(), dest, true) {
-                    Ok(_) => {
-                        update_status(locale::get_message(
-                            &locale,
-                            "extracting-files",
-                            Some(&args),
-                        ));
-                    }
-                    Err(e) => {
-                        update_status(locale::get_message(
-                            &locale,
-                            "extracting-files",
-                            Some(&args),
-                        ));
-                        log_error!("Error extracting file ({}/{}): {}", count, total, e);
-                    }
-                }
-            }
             {
                 let mut task = TASK_RUNNING.lock().unwrap();
                 *task = false; // Allow other threads to run again
             }
+            let locale = locale::get_locale(None);
             update_status(locale::get_message(&locale, "all-extracted", None)); // Set the status to confirm to the user that all has finished
         });
 
@@ -468,11 +560,25 @@ pub fn extract_all(destination: PathBuf, yield_for_thread: bool, use_alias: bool
             // Get locale for localised status messages
             let locale = locale::get_locale(None);
 
-            // Extract music directory
-            extract_dir(destination.clone(), Category::Music, true, use_alias);
+            // Create the destination directory if it doesn't exist
+            if let Err(e) = fs::create_dir_all(destination.clone()) {
+                log_error!("Error creating directory: {}", e);
+            }
 
-            // Extract http directory
-            extract_dir(destination.clone(), Category::All, true, use_alias);
+            // Music is stored in the cache's /sounds folder, which the "All"
+            // listing does not cover, so refresh and extract it separately.
+            // The list is always refreshed here: extracting the stale list
+            // from whichever GUI tab is open would miss most assets.
+            refresh(Category::Music, false, true);
+            let music_file_list = get_file_list();
+            // Group music into its own folder.
+            extract_file_list(&destination, &music_file_list, use_alias, true);
+
+            // Everything else: the /http cache directory, the SQL database
+            // and rbx-storage, grouped into per-type folders.
+            refresh(Category::All, false, true);
+            let asset_file_list = get_file_list();
+            extract_file_list(&destination, &asset_file_list, use_alias, true);
 
             {
                 let mut task = TASK_RUNNING.lock().unwrap();
@@ -689,7 +795,10 @@ pub fn get_headers(category: &Category) -> Vec<&'static str> {
             vec!["<roblox!"]
         }
         Category::Images => {
-            vec!["PNG", "WEBP"]
+            // PNG/WEBP are the most common, keep them first. "JFIF", "GIF8"
+            // and "DDS " are ASCII signatures for JPEG, GIF and DDS textures,
+            // so they can be used in the header-based detection framework.
+            vec!["PNG", "WEBP", "JFIF", "GIF8", "DDS "]
         }
         Category::All => {
             // Aggregate headers from every category except `All` and `Music`.
@@ -883,6 +992,63 @@ mod tests {
         let bytes = b"no header here".to_vec();
         let result = extract_bytes("OggS", bytes.clone());
         assert_eq!(result, bytes);
+    }
+
+    #[test]
+    fn test_detect_extension_known_formats() {
+        assert_eq!(detect_extension(b"\x89PNG\r\n\x1a\nrest"), Some("png"));
+        assert_eq!(detect_extension(b"RIFF\x00\x00\x00\x00WEBPdata"), Some("webp"));
+        assert_eq!(detect_extension(b"RIFF\x00\x00\x00\x00WAVEdata"), Some("wav"));
+        assert_eq!(detect_extension(b"OggSrest"), Some("ogg"));
+        assert_eq!(detect_extension(b"ID3rest"), Some("mp3"));
+        assert_eq!(detect_extension(b"fLaCrest"), Some("flac"));
+        assert_eq!(detect_extension(&[0xFF, 0xD8, 0xFF, 0xE0]), Some("jpg"));
+        assert_eq!(detect_extension(b"GIF89a"), Some("gif"));
+        assert_eq!(detect_extension(b"GIF87a"), Some("gif"));
+        assert_eq!(detect_extension(b"\xABKTX 11\xBB"), Some("ktx"));
+        assert_eq!(detect_extension(b"<roblox!"), Some("rbxm"));
+        assert_eq!(detect_extension(b"DDS rest"), Some("dds"));
+        assert_eq!(detect_extension(b"BMfake"), Some("bmp"));
+    }
+
+    #[test]
+    fn test_detect_extension_unknown() {
+        assert_eq!(detect_extension(b"unknown data"), None);
+        assert_eq!(detect_extension(b""), None);
+        // "RIFF" without a WEBP/WAVE form type is not a known format.
+        assert_eq!(detect_extension(b"RIFFothersSSSS"), None);
+        assert_eq!(detect_extension(b"RIFF"), None);
+    }
+
+    #[test]
+    fn test_extension_from_header() {
+        assert_eq!(extension_from_header("PNG"), Some("png"));
+        assert_eq!(extension_from_header("WEBP"), Some("webp"));
+        assert_eq!(extension_from_header("OggS"), Some("ogg"));
+        assert_eq!(extension_from_header("ID3"), Some("mp3"));
+        assert_eq!(extension_from_header("KTX"), Some("ktx"));
+        assert_eq!(extension_from_header("<roblox!"), Some("rbxm"));
+        assert_eq!(extension_from_header("JFIF"), Some("jpg"));
+        assert_eq!(extension_from_header("GIF8"), Some("gif"));
+        assert_eq!(extension_from_header("DDS "), Some("dds"));
+        assert_eq!(extension_from_header("unknown"), None);
+    }
+
+    #[test]
+    fn test_category_folder_names() {
+        assert_eq!(category_folder(Category::Music), "music");
+        assert_eq!(category_folder(Category::Sounds), "sounds");
+        assert_eq!(category_folder(Category::Images), "images");
+        assert_eq!(category_folder(Category::Ktx), "ktx-files");
+        assert_eq!(category_folder(Category::Rbxm), "rbxm-files");
+        assert_eq!(category_folder(Category::All), "other");
+    }
+
+    #[test]
+    fn test_is_placeholder_asset() {
+        let placeholder = create_no_files(&locale::get_locale(Some("en-GB")));
+        assert!(is_placeholder_asset(&placeholder));
+        assert!(!is_placeholder_asset(&dummy_asset("asset")));
     }
 }
 

@@ -108,6 +108,7 @@ overwrite-with = double clcikca f eile to voerwitte with "{ $asset }"
 
 
 # Statuses
+deleted-files = Files deleted # TODO: Translate
 idling = idlignm
 deleting-files = deltinyg files ({ $item }/{ $total })
 reading-files = dearfding fikles ({ $item }/{ $total })

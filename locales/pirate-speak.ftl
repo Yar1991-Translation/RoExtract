@@ -105,7 +105,8 @@ logs-description = The ship’s log keeps track o’ what’s happenin’. If tr
 copy-choose-file = Double-click a file to copy it  
 overwrite-with = Double-click a file to overwrite with "{ $asset }"  
 
-# Statuses  
+# Statuses
+deleted-files = Files deleted # TODO: Translate
 idling = Swayin’ in the Breeze  
 deleting-files = Tossin’ Files Overboard ({ $item }/{ $total })  
 reading-files = Readin’ the Treasure Maps ({ $item }/{ $total })  

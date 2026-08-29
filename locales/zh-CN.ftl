@@ -13,10 +13,10 @@ about = 关于
 logs = 日志
 
 # Buttons
-button-reset-rbx-storage-dir = Reset rbx-storage Directory # TODO: Translate
-button-change-rbx-storage-dir = Change rbx-storage Directory # TODO: Translate
-button-reset-sql-db = Reset SQL Database # TODO: Translate
-button-change-sql-db = Change SQL Database # TODO: Translate
+button-reset-rbx-storage-dir = 重置 rbx-storage 目录
+button-change-rbx-storage-dir = 更改 rbx-storage 目录
+button-reset-sql-db = 重置 SQL 数据库
+button-change-sql-db = 更改 SQL 数据库
 button-delete-this-dir = 删除此目录 <Del>
 button-extract-type = 提取此类型的所有文件 <F3>
 button-refresh = 刷新 <F5>
@@ -40,8 +40,8 @@ button-disable-display-image-preview = 停止显示图片预览
 input-preview-size = 预览大小
 
 # Confirmations
-confirmation-custom-sql-title = Choose a SQL Database # TODO: Translate
-confirmation-custom-sql-description = Do you want to choose a different SQL Database? # TODO: Translate
+confirmation-custom-sql-title = 选择 SQL 数据库
+confirmation-custom-sql-description = 您想要选择不同的 SQL 数据库吗？
 confirmation-generic-confirmation-title = 确认
 confirmation-delete-confirmation-title = 删除文件
 confirmation-delete-confirmation-description = 您确定要删除此目录中的文件吗？
@@ -60,10 +60,10 @@ empty-state-description = 请至少运行一次 Roblox 客户端，然后点击"
 empty-state-hint = 如果提取速度较慢，请先尝试清除缓存。
 
 # Errors
-error-invalid-database-description = Please make sure the path you provided is an SQLite Database # TODO: Translate
-error-invalid-database-title = Invalid database! # TODO: Translate
-error-sql-detection-title = Database detection failed! # TODO: Translate
-error-sql-detection-description = Database detection failed! Is the client installed and you ran it at least once? # TODO: Translate
+error-invalid-database-description = 请确保您提供的路径是 SQLite 数据库
+error-invalid-database-title = 无效的数据库！
+error-sql-detection-title = 数据库检测失败！
+error-sql-detection-description = 数据库检测失败！客户端是否已安装且您至少运行过一次？
 no-files = 没有要列出的文件
 error-directory-detection-title = 目录检测失败
 error-directory-detection-description = Roblox是否已安装且 您至少运行过一次？
@@ -74,7 +74,7 @@ error-invalid-directory-description = 请确保您提供的路径是一个目录
 generic-error-critical = 严重错误
 
 # Headings
-downloading-update = Downloading update… # TODO: Translate
+downloading-update = 正在下载更新…
 actions = 操作
 updates = 更新
 language-settings = 语言设置
@@ -93,10 +93,10 @@ download-development-build = 使用开发版本以提前获得功能
 checkbox-hide-user-logs = 从日志中隐藏用户名
 
 # Descriptions
-custom-rbx-storage-dir-description = If you want to use a different rbx-storage directory, change it below. You can reset it back to the default with the other button. # TODO: Translate
-custom-sql-db-description = If you want to access a different cache, change your SQL Database below, you can set it back to default with the other button. This is different from your installation folder. # TODO: Translate
+custom-rbx-storage-dir-description = 如果您想使用不同的 rbx-storage 目录，请在下方更改，您可以点击另一个按钮恢复默认设置。
+custom-sql-db-description = 如果您想访问不同的缓存，请在下方更改 SQL 数据库，您可以点击另一个按钮恢复默认设置。这与您的安装文件夹不同。
 clear-cache-description = 如果从目录列出文件耗时太长，您可以清理Roblox缓存来帮助解决，客户端将在需要时重新生成这些文件
-extract-all-description = 此按钮将把所有资源提取到文件夹
+extract-all-description = 此按钮会把所有资源提取到文件夹，并按类型分类（如 /music、/images）
 custom-cache-dir-description = 如果您想访问不同的缓存，可以在下方更改
 use-alias-description = 使用您在此程序中重命名时使用的名称
 swap-choose-file = 双击文件进行替换
@@ -112,14 +112,15 @@ reading-files = 正在读取文件 ({ $item }/{ $total })
 extracting-files = 正在提取文件 ({ $item }/{ $total })
 filtering-files = 正在过滤文件 ({ $item }/{ $total })
 all-extracted = 所有文件已提取
+deleted-files = 文件已删除
 stage = 阶段 { $stage }/{ $max }: { $status }
 swapped = 已将 { $item_a } 与 { $item_b } 替换
 copied = 已用 { $item_a } 覆盖 { $item_b }
 
 # Misc
-no-directory = Not found # TODO: Translate
-rbx-storage-directory = rbx-storage Directory: { $directory } # TODO: Translate
-sql-database = SQL Database: { $path } # TODO: Translate
+no-directory = 未找到
+rbx-storage-directory = rbx-storage 目录: { $directory }
+sql-database = SQL 数据库: { $path }
 no-function = （尚未功能化）
 version = 版本: v{ $version } (编译于 { $date })
 cache-directory = 缓存目录: { $directory }
