@@ -142,11 +142,14 @@ impl CheckpointUi {
                 ui.horizontal(|ui| {
                     ui.strong(name);
                     let mut args = FluentArgs::new();
-                    let time = chrono::Local
-                        .timestamp_opt(checkpoint.created_at_secs, 0)
-                        .single()
-                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                        .unwrap_or_default();
+                    let time = chrono::TimeZone::timestamp_opt(
+                        &chrono::Local,
+                        checkpoint.created_at_secs,
+                        0,
+                    )
+                    .single()
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                    .unwrap_or_default();
                     args.set("time", time);
                     ui.label(locale::get_message(
                         locale,
