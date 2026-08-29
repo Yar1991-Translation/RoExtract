@@ -950,6 +950,24 @@ mod tests {
     }
 
     #[test]
+    fn test_determine_category_jpeg() {
+        let jpeg_bytes = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00";
+        assert_eq!(determine_category(jpeg_bytes), Category::Images);
+    }
+
+    #[test]
+    fn test_determine_category_gif() {
+        let gif_bytes = b"GIF89a";
+        assert_eq!(determine_category(gif_bytes), Category::Images);
+    }
+
+    #[test]
+    fn test_determine_category_dds() {
+        let dds_bytes = b"DDS \x7C\x00\x00\x00";
+        assert_eq!(determine_category(dds_bytes), Category::Images);
+    }
+
+    #[test]
     fn test_get_headers() {
         assert!(get_headers(&Category::Images).contains(&"PNG"));
         assert!(get_headers(&Category::Images).contains(&"WEBP"));
