@@ -137,3 +137,21 @@ update-changelog = Update changelog below
 support-sponsor = ♥ Sponsor
 support-project-donate = ♥ Donate
 setting-below-restart-required = Note: Changing the setting below requires restarting the program for it to apply.
+
+# Cache Checkpoints
+cache-checkpoints = Cache Checkpoint
+cache-checkpoints-description = A checkpoint records the full cache state at one moment and acts as a time boundary. The asset tabs only show caches that were added or changed after the active checkpoint. Creating a checkpoint never deletes or modifies real cache data.
+checkpoint-create = Create checkpoint
+checkpoint-default-name = Checkpoint
+checkpoint-creating = Creating checkpoint…
+checkpoint-created = Checkpoint created
+checkpoint-view = View
+checkpoint-rename = Rename
+checkpoint-delete = Delete
+checkpoint-created-at = Created at { $time }
+checkpoint-added = { $count } added
+checkpoint-modified = { $count } changed
+checkpoint-removed = { $count } removed
+checkpoint-empty = No checkpoints yet.
+checkpoint-disable = Show everything (disable filtering)
+checkpoint-filter-description = Only caches created or changed after the active checkpoint are shown in the asset tabs.

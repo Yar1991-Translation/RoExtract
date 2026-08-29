@@ -323,6 +323,12 @@ pub struct FileListUi {
 // copying: &'a mut bool,
 
 impl FileListUi {
+    /// Mark the active tab without rendering the list (e.g. when switching to
+    /// the Cache Checkpoint tab); returning to an asset tab triggers a refresh.
+    pub fn set_tab(&mut self, tab: &str) {
+        self.current_tab = Some(tab.to_owned());
+    }
+
     fn handle_text_edit(&mut self, ui: &mut egui::Ui, alias: &str, file_name: &str) {
         let mut mutable_name = alias.to_string();
         let response = egui::TextEdit::singleline(&mut mutable_name)
@@ -552,6 +558,9 @@ impl FileListUi {
         }
 
         let file_list = logic::get_file_list();
+        // When a Cache Checkpoint is active, only show the caches that
+        // appeared or changed after it.
+        let file_list = logic::checkpoints::filter_for_view(file_list);
 
         let mut focus_search_box = false; // Focus the search box toggle for this frame
 
@@ -920,9 +929,11 @@ impl FileListUi {
 
                                         // Draw text ontop of image
                                         let text = egui::Label::new(
-                                            egui::RichText::new(alias)
-                                                .text_style(egui::TextStyle::Body)
-                                                .color(text_colour),
+                                            egui::RichText::new(logic::alias_with_extension(
+                                                asset,
+                                            ))
+                                            .text_style(egui::TextStyle::Body)
+                                            .color(text_colour),
                                         )
                                         .truncate()
                                         .selectable(false);
@@ -1010,7 +1021,7 @@ impl FileListUi {
                                 ui.painter().text(
                                     egui::pos2(alias_x, rect.min.y),
                                     egui::Align2::LEFT_TOP,
-                                    alias,
+                                    logic::alias_with_extension(asset),
                                     egui::TextStyle::Body.resolve(ui.style()),
                                     text_colour,
                                 );

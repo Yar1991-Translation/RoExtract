@@ -13,6 +13,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use crate::{config, locale, log, logic, updater}; // Used for functionality
 use eframe::egui::TextureHandle;
 
+mod checkpoints;
 mod file_list;
 mod settings;
 mod welcome;
@@ -152,6 +153,7 @@ static IMAGE_CACHE: LazyLock<Mutex<ImageCache>> =
 struct TabViewer<'a> {
     locale: &'a mut FluentBundle<Arc<FluentResource>>,
     file_list_ui: &'a mut file_list::FileListUi,
+    checkpoint_ui: &'a mut checkpoints::CheckpointUi,
 }
 
 /// Returns a cached texture without cloning the entire cache.
@@ -241,9 +243,13 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-        if tab != "settings" && tab != "about" && tab != "logs" {
+        if tab != "settings" && tab != "about" && tab != "logs" && tab != "cache-checkpoints" {
             // This is only shown on tabs other than settings (Extracting assets)
             self.file_list_ui.ui(tab.to_string(), ui);
+        } else if tab == "cache-checkpoints" {
+            // Cache Checkpoint management (缓存关键帧)
+            self.file_list_ui.set_tab("cache-checkpoints");
+            self.checkpoint_ui.ui(ui, self.locale);
         } else if tab == "settings" {
             // This is only shown in the settings tab
 
@@ -395,6 +401,7 @@ struct MyApp {
     tab_map: HashMap<u32, (SurfaceIndex, NodeIndex, usize)>, // Tab map for keyboard navigation
     locale: FluentBundle<Arc<FluentResource>>,
     file_list_ui: file_list::FileListUi,
+    checkpoint_ui: checkpoints::CheckpointUi,
     update_check_started: bool, // Ensures the background update check only runs once
     update_prompt: Option<updater::gui::UpdatePrompt>, // In-app "update available" prompt
 }
@@ -407,6 +414,7 @@ impl Default for MyApp {
             "images".to_owned(),
             "rbxm-files".to_owned(),
             "ktx-files".to_owned(),
+            "cache-checkpoints".to_owned(),
             "settings".to_owned(),
             "logs".to_owned(),
             "about".to_owned(),
@@ -426,6 +434,7 @@ impl Default for MyApp {
             tab_map,
             locale: locale::get_locale(None),
             file_list_ui: file_list::FileListUi::default(),
+            checkpoint_ui: checkpoints::CheckpointUi::default(),
             update_check_started: false,
             update_prompt: None,
         }
@@ -605,6 +614,7 @@ impl eframe::App for MyApp {
                 &mut TabViewer {
                     locale: &mut self.locale,
                     file_list_ui: &mut self.file_list_ui,
+                    checkpoint_ui: &mut self.checkpoint_ui,
                 },
             );
 

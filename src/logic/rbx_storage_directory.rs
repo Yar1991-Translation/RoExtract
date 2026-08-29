@@ -160,7 +160,10 @@ pub fn refresh(
                     } else {
                         category
                     };
-                    let asset_info = create_asset_info(hash.clone(), &path, detected_category);
+                    let mut asset_info = create_asset_info(hash.clone(), &path, detected_category);
+                    // Identify the real format from the source bytes and record
+                    // it (file type, extension, fingerprint).
+                    logic::apply_source_detection(&mut asset_info, &buffer);
                     logic::update_file_list(asset_info, cli_list_mode);
                     break;
                 }

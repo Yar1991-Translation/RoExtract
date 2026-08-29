@@ -301,10 +301,16 @@ pub fn refresh(
                 let path = entry?.path();
 
                 if category == &logic::Category::Music {
-                    logic::update_file_list(
-                        create_asset_info_unchecked(&path, *category),
-                        cli_list_mode,
-                    );
+                    let mut asset_info = create_asset_info_unchecked(&path, *category);
+                    // Music cache files are raw audio, so read the first bytes
+                    // to identify the format/extension for display purposes.
+                    if let Ok(mut file) = fs::File::open(&path) {
+                        let mut buffer = vec![0; 2048];
+                        let bytes_read = file.read(&mut buffer).unwrap_or(0);
+                        buffer.truncate(bytes_read);
+                        logic::apply_source_detection(&mut asset_info, &buffer);
+                    }
+                    logic::update_file_list(asset_info, cli_list_mode);
                 } else {
                     let mut file = fs::File::open(&path)?;
 
@@ -321,11 +327,14 @@ pub fn refresh(
                         if !header.is_empty() {
                             // Add it to the list if the header is inside of the file.
                             if logic::bytes_contains(&buffer, header.as_bytes()) {
-                                let asset_info = if *category == logic::Category::All {
+                                let mut asset_info = if *category == logic::Category::All {
                                     create_asset_info_unchecked(&path, determine_category(&buffer))
                                 } else {
                                     create_asset_info_unchecked(&path, *category)
                                 };
+                                // Identify the real format from the source bytes
+                                // and record it (file type, extension, fingerprint).
+                                logic::apply_source_detection(&mut asset_info, &buffer);
                                 logic::update_file_list(asset_info, cli_list_mode);
                                 break; // Stop after the first match so a file isn't listed twice
                             }

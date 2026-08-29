@@ -267,7 +267,7 @@ pub fn refresh(
                     });
 
                     if header_found {
-                        Ok(logic::AssetInfo {
+                        let mut info = logic::AssetInfo {
                             name: hex::encode(row.get::<_, Vec<u8>>(0)?),
                             _size: row.get(1)?,
                             last_modified,
@@ -279,7 +279,15 @@ pub fn refresh(
                             } else {
                                 category
                             }, // Determine category if all
-                        })
+                            fingerprint: None,
+                            file_type: None,
+                            extension: None,
+                            detected_at: None,
+                        };
+                        // Identify the real format from the source bytes and
+                        // record it (file type, extension, fingerprint).
+                        logic::apply_source_detection(&mut info, &bytes);
+                        Ok(info)
                     } else {
                         Err(rusqlite::Error::InvalidQuery) // Return error for this asset as it doesn't match
                     }

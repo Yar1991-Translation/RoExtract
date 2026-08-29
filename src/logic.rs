@@ -15,6 +15,7 @@ use strum_macros::{Display, EnumIter};
 use crate::{config, locale};
 
 pub mod cache_directory;
+pub mod checkpoints;
 pub mod rbx_storage_directory;
 pub mod sql_database;
 
@@ -61,6 +62,15 @@ pub struct AssetInfo {
     pub from_sql: bool,
     pub from_rbx_storage: bool,
     pub category: Category,
+    /// Content fingerprint (FNV-1a over the inspected source bytes), used by
+    /// Cache Checkpoint change detection. `None` when the source wasn't read.
+    pub fingerprint: Option<u64>,
+    /// Detected file format name, e.g. "PNG", "WebP", "MP4" or "unknown".
+    pub file_type: Option<String>,
+    /// Detected file extension (no dot), e.g. "png"; `None` when unknown.
+    pub extension: Option<String>,
+    /// When the source data was last inspected for detection.
+    pub detected_at: Option<SystemTime>,
 }
 
 // Define local functions
@@ -168,6 +178,10 @@ fn create_no_files(locale: &FluentBundle<Arc<FluentResource>>) -> AssetInfo {
         from_sql: false,
         from_rbx_storage: false,
         category: Category::All,
+        fingerprint: None,
+        file_type: None,
+        extension: None,
+        detected_at: None,
     }
 }
 
@@ -322,39 +336,141 @@ fn extension_from_header(header: &str) -> Option<&'static str> {
     }
 }
 
-/// Auto-detect a file extension from the magic bytes at the start of `bytes`.
+/// Identify the real format of a file from its magic bytes (file signature).
 ///
-/// Unlike the category headers, which are searched anywhere within the file
-/// (to tolerate wrappers around the asset), this matches the actual signature
-/// at the start, so it is safe to apply to unknown files as well.
-pub fn detect_extension(bytes: &[u8]) -> Option<&'static str> {
+/// Returns `(file_type, extension)` where `file_type` is a human-readable
+/// format name and `extension` is the extension without a dot.
+/// The signature must match at the start of `bytes` so unknown files can be
+/// inspected safely; returns `None` when the format cannot be determined.
+pub fn detect_file_format(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        Some("png")
-    } else if bytes.starts_with(b"RIFF") && bytes.len() >= 12 && &bytes[8..12] == b"WEBP" {
-        Some("webp")
-    } else if bytes.starts_with(b"RIFF") && bytes.len() >= 12 && &bytes[8..12] == b"WAVE" {
-        Some("wav")
+        Some(("PNG", "png"))
     } else if bytes.starts_with(b"OggS") {
-        Some("ogg")
+        Some(("Ogg", "ogg"))
     } else if bytes.starts_with(b"ID3") {
-        Some("mp3")
+        Some(("MP3", "mp3"))
     } else if bytes.starts_with(b"fLaC") {
-        Some("flac")
+        Some(("FLAC", "flac"))
     } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-        Some("jpg")
+        Some(("JPEG", "jpg"))
     } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
-        Some("gif")
+        Some(("GIF", "gif"))
+    } else if bytes.starts_with(b"RIFF") && bytes.len() >= 12 {
+        if &bytes[8..12] == b"WEBP" {
+            Some(("WebP", "webp"))
+        } else if &bytes[8..12] == b"WAVE" {
+            Some(("WAV", "wav"))
+        } else {
+            None
+        }
     } else if bytes.starts_with(b"\xABKTX 11\xBB") || bytes.starts_with(b"KTX") {
-        Some("ktx")
+        Some(("KTX", "ktx"))
     } else if bytes.starts_with(b"<roblox!") {
-        Some("rbxm")
+        Some(("RBXM", "rbxm"))
     } else if bytes.starts_with(b"DDS ") {
-        Some("dds")
+        Some(("DDS", "dds"))
     } else if bytes.starts_with(b"BM") {
-        Some("bmp")
+        Some(("BMP", "bmp"))
+    } else if bytes.starts_with(b"%PDF-") {
+        Some(("PDF", "pdf"))
+    } else if bytes.starts_with(b"PK\x03\x04") || bytes.starts_with(b"PK\x05\x06") {
+        Some(("ZIP", "zip"))
+    } else if bytes.starts_with(&[0x1F, 0x8B]) {
+        Some(("GZIP", "gz"))
+    } else if bytes.starts_with(b"\x1A\x45\xDF\xA3") {
+        Some(("WebM", "webm"))
+    } else if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
+        // ISO Base Media: MP4 / M4A / AVIF / WebM containers.
+        let brand = &bytes[8..12];
+        if brand == b"avif" || brand == b"avis" {
+            Some(("AVIF", "avif"))
+        } else if brand == b"M4A " || brand == b"M4B " {
+            Some(("MP4", "m4a"))
+        } else if brand == b"webm" {
+            Some(("WebM", "webm"))
+        } else if brand == b"mp4"
+            || brand == b"isom"
+            || brand == b"iso2"
+            || brand == b"mp41"
+            || brand == b"mp42"
+            || brand == b"mmp4"
+            || brand == b"M4V "
+        {
+            Some(("MP4", "mp4"))
+        } else {
+            None
+        }
+    } else if bytes.len() >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0 {
+        // MPEG audio frame sync (MP3 without an ID3 tag). Coarse rule, only
+        // reached after every more specific signature above failed.
+        Some(("MP3", "mp3"))
     } else {
         None
     }
+}
+
+/// Detect a file extension from the magic bytes at the start of `bytes`.
+pub fn detect_extension(bytes: &[u8]) -> Option<&'static str> {
+    detect_file_format(bytes).map(|(_, extension)| extension)
+}
+
+/// Stable FNV-1a hash of the inspected source bytes; used as a content
+/// fingerprint for Cache Checkpoint change detection. Deterministic across
+/// runs and Rust versions so persisted checkpoints stay comparable.
+pub fn content_fingerprint(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for &byte in bytes {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+/// Inspect the source-file bytes of a cache record and store the detected
+/// format, extension, content fingerprint and detection time on it.
+///
+/// Unknown formats are marked as "unknown" (no random guess) for debugging
+/// purposes; extension stays `None` and extraction falls back to `.bin`.
+pub fn apply_source_detection(asset: &mut AssetInfo, bytes: &[u8]) {
+    asset.fingerprint = Some(content_fingerprint(bytes));
+    match detect_file_format(bytes) {
+        Some((file_type, extension)) => {
+            asset.file_type = Some(file_type.to_owned());
+            asset.extension = Some(extension.to_owned());
+        }
+        None => {
+            asset.file_type = Some("unknown".to_owned());
+            asset.extension = None;
+        }
+    }
+    asset.detected_at = Some(SystemTime::now());
+}
+
+/// The alias (or raw name) of an asset with its detected extension appended,
+/// e.g. "abc123" detected as PNG → "abc123.png". Never duplicates the
+/// extension if the alias already contains it.
+pub fn alias_with_extension(asset: &AssetInfo) -> String {
+    let alias = config::get_asset_alias(&asset.name);
+    match &asset.extension {
+        Some(extension)
+            if !extension.is_empty()
+                && !alias.to_lowercase().ends_with(&format!(".{extension}")) =>
+        {
+            format!("{alias}.{extension}")
+        }
+        _ => alias,
+    }
+}
+
+/// Whether a long-running delete/extract/checkpoint task is currently running.
+pub fn get_task_running() -> bool {
+    *TASK_RUNNING.lock().unwrap()
+}
+
+/// Set the delete/extract/checkpoint task guard; only the threads that hold
+/// the guard may call this.
+pub fn set_task_running(value: bool) {
+    *TASK_RUNNING.lock().unwrap() = value;
 }
 
 pub fn extract_to_file(
@@ -373,13 +489,14 @@ pub fn extract_to_file(
     };
 
     // Automatically apply the correct extension based on the file's magic
-    // bytes, with the header table as a fallback for formats we can't detect.
+    // bytes, with the header table and the detection result from listing time
+    // as fallbacks. ".bin" is the last resort for truly unknown content.
     if add_extension {
         let extension = detect_extension(&extracted_bytes)
-            .or_else(|| header.as_deref().and_then(extension_from_header));
-        if let Some(extension) = extension {
-            destination.set_extension(extension);
-        }
+            .or_else(|| header.as_deref().and_then(extension_from_header))
+            .or_else(|| asset.extension.as_deref())
+            .unwrap_or("bin");
+        destination.set_extension(extension);
     }
 
     // Ensure parent directory exists (needed when asset name contains subdirectories,
@@ -713,6 +830,8 @@ pub fn copy_assets(asset_a: AssetInfo, asset_b: AssetInfo) {
 pub fn filter_file_list(query: String) {
     let query_lower = query.to_lowercase();
     let file_list = get_file_list(); // Snapshot (Arc refcount bump)
+    // Respect the active Cache Checkpoint: search only the changes it shows.
+    let file_list = checkpoints::filter_for_view(file_list);
 
     // Match case-insensitively on name and alias; collect once and assign under
     // a single lock rather than locking per match.
@@ -748,6 +867,10 @@ pub fn create_asset_info(asset: &str, category: Category) -> AssetInfo {
         from_sql: false,
         from_rbx_storage: false,
         category,
+        fingerprint: None,
+        file_type: None,
+        extension: None,
+        detected_at: None,
     }
 }
 
@@ -859,6 +982,10 @@ mod tests {
             from_sql: false,
             from_rbx_storage: false,
             category: Category::Music,
+            fingerprint: None,
+            file_type: None,
+            extension: None,
+            detected_at: None,
         }
     }
 
@@ -1036,6 +1163,36 @@ mod tests {
         // "RIFF" without a WEBP/WAVE form type is not a known format.
         assert_eq!(detect_extension(b"RIFFothersSSSS"), None);
         assert_eq!(detect_extension(b"RIFF"), None);
+    }
+
+    #[test]
+    fn test_detect_file_format_new_formats() {
+        assert_eq!(detect_file_format(b"\x1A\x45\xDF\xA3data"), Some(("WebM", "webm")));
+        assert_eq!(detect_file_format(b"%PDF-1.7"), Some(("PDF", "pdf")));
+        assert_eq!(detect_file_format(b"PK\x03\x04rest"), Some(("ZIP", "zip")));
+        assert_eq!(detect_file_format(b"PK\x05\x06"), Some(("ZIP", "zip")));
+        assert_eq!(detect_file_format(&[0x1F, 0x8B, 0x08, 0x00]), Some(("GZIP", "gz")));
+        // ISO-BMFF brands
+        let mut mp4 = b"\x00\x00\x00\x20ftypmp42".to_vec();
+        mp4.extend_from_slice(b"....mdat");
+        assert_eq!(detect_file_format(&mp4).map(|(_, e)| e), Some("mp4"));
+        let mut avif = b"\x00\x00\x00\x20ftypavif".to_vec();
+        assert_eq!(detect_file_format(&avif).map(|(_, e)| e), Some("avif"));
+        let mut m4a = b"\x00\x00\x00\x20ftypM4A ".to_vec();
+        assert_eq!(detect_file_format(&m4a).map(|(_, e)| e), Some("m4a"));
+        // MPEG frame sync without ID3 tag
+        assert_eq!(detect_file_format(&[0xFF, 0xFB, 0x90, 0x00]).map(|(_, e)| e), Some("mp3"));
+        // Non-BMFF "ftyp" without a known brand stays unknown.
+        assert_eq!(detect_file_format(b"\x00\x00\x00\x20ftyp????"), None);
+    }
+
+    #[test]
+    fn test_content_fingerprint_deterministic() {
+        let data = b"some cache bytes";
+        assert_eq!(content_fingerprint(data), content_fingerprint(data));
+        assert_ne!(content_fingerprint(data), content_fingerprint(b"other bytes"));
+        // Empty input must not panic and is stable.
+        assert_eq!(content_fingerprint(b""), content_fingerprint(b""));
     }
 
     #[test]

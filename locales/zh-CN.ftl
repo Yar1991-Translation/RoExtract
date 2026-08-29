@@ -135,3 +135,21 @@ failed-opening-file = 错误：打开文件失败
 error-extracting-file = 错误：提取失败，原因：{ $error }
 error-check-logs = 错误，请检查日志
 failed-not-file = 错误 '{ $file }' 不是文件
+
+# Checkpoints
+cache-checkpoints = 缓存关键帧
+cache-checkpoints-description = 关键帧会记录创建时刻的完整缓存状态，并作为一个时间分界点；各标签页只显示当前关键帧之后新增或变化的缓存。创建关键帧绝不会删除或修改真实缓存数据。
+checkpoint-create = 创建关键帧
+checkpoint-default-name = 关键帧
+checkpoint-creating = 正在创建关键帧…
+checkpoint-created = 关键帧已创建
+checkpoint-view = 查看
+checkpoint-rename = 重命名
+checkpoint-delete = 删除
+checkpoint-created-at = 创建于 { $time }
+checkpoint-added = 新增 { $count }
+checkpoint-modified = 变化 { $count }
+checkpoint-removed = 删除 { $count }
+checkpoint-empty = 还没有关键帧。创建关键帧后，各标签页将只显示其之后的缓存变化。
+checkpoint-disable = 显示全部缓存（关闭过滤）
+checkpoint-filter-description = 已启用关键帧过滤：标签页只显示当前关键帧之后新增或变化的缓存。
