@@ -24,6 +24,10 @@ jobs:
         run: |
           set -o pipefail
           cargo test --no-run --verbose 2>&1 | tee -a build.log || true
+      - name: Run tests
+        run: |
+          set -o pipefail
+          cargo test -- --test-threads=1 2>&1 | tee -a build.log || true
       - name: Publish build log as release asset
         if: always()
         env:

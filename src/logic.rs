@@ -1176,9 +1176,9 @@ mod tests {
         let mut mp4 = b"\x00\x00\x00\x20ftypmp42".to_vec();
         mp4.extend_from_slice(b"....mdat");
         assert_eq!(detect_file_format(&mp4).map(|(_, e)| e), Some("mp4"));
-        let mut avif = b"\x00\x00\x00\x20ftypavif".to_vec();
+        let avif = b"\x00\x00\x00\x20ftypavif".to_vec();
         assert_eq!(detect_file_format(&avif).map(|(_, e)| e), Some("avif"));
-        let mut m4a = b"\x00\x00\x00\x20ftypM4A ".to_vec();
+        let m4a = b"\x00\x00\x00\x20ftypM4A ".to_vec();
         assert_eq!(detect_file_format(&m4a).map(|(_, e)| e), Some("m4a"));
         // MPEG frame sync without ID3 tag
         assert_eq!(detect_file_format(&[0xFF, 0xFB, 0x90, 0x00]).map(|(_, e)| e), Some("mp3"));

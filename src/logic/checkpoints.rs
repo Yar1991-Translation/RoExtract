@@ -398,7 +398,7 @@ mod tests {
         let cache_a = asset("A", Category::Images, 10, Some(111));
         let cache_b = asset("B", Category::Sounds, 20, Some(222));
         let cache_c = asset("C", Category::Ktx, 30, Some(333));
-        let entries = snapshot(&[cache_a, cache_b, cache_c]);
+        let entries = snapshot(&[cache_a.clone(), cache_b.clone(), cache_c.clone()]);
 
         // Current: A unchanged, B changed content, C gone, D newly added.
         let mut current_b = asset("B", Category::Sounds, 20, Some(222));
@@ -418,8 +418,10 @@ mod tests {
         assert_eq!(diff.removed.len(), 1);
         assert_eq!(diff.removed[0].name, "C");
 
-        // An identical current state produces an empty diff.
-        let diff = diff_checkpoint(&checkpoint(snapshot(&[cache_a, cache_b, cache_c])), &current);
+        // The same state again still produces an empty diff for A and the same
+        // additions/changes/removals as the current state.
+        let snapshot2 = snapshot(&[cache_a, cache_b, cache_c]);
+        let diff = diff_checkpoint(&checkpoint(snapshot2), &current);
         assert_eq!(diff.added.len(), 1);
         assert_eq!(diff.modified.len(), 1);
         assert_eq!(diff.removed.len(), 1);
