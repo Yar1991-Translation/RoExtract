@@ -366,6 +366,10 @@ pub fn create_asset_info(asset: &str, category: logic::Category) -> Option<logic
                     from_sql: true,
                     from_rbx_storage: false,
                     category,
+                    fingerprint: None,
+                    file_type: None,
+                    extension: None,
+                    detected_at: None,
                 })
             },
         )

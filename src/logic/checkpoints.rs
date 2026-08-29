@@ -13,7 +13,6 @@ use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::logic::{self, AssetInfo, Category};
 use crate::{config, locale};
@@ -307,6 +306,7 @@ pub fn create_checkpoint() -> Option<String> {
         return None;
     }
     let id = new_checkpoint_id();
+    let returned_id = id.clone();
     let index = CHECKPOINTS.lock().unwrap().len() + 1;
 
     // Status message before spawning the background snapshot (the bundle is
@@ -342,7 +342,7 @@ pub fn create_checkpoint() -> Option<String> {
         logic::update_status(locale::get_message(&locale, "checkpoint-created", None));
     });
 
-    Some(id)
+    Some(returned_id)
 }
 
 #[cfg(test)]

@@ -30,6 +30,10 @@ fn create_asset_info_unchecked(path: &PathBuf, category: logic::Category) -> log
                     from_sql: false,
                     from_rbx_storage: false,
                     category,
+                    fingerprint: None,
+                    file_type: None,
+                    extension: None,
+                    detected_at: None,
                 }
             }
             Err(e) => {
@@ -42,6 +46,10 @@ fn create_asset_info_unchecked(path: &PathBuf, category: logic::Category) -> log
                     from_sql: false,
                     from_rbx_storage: false,
                     category,
+                    fingerprint: None,
+                    file_type: None,
+                    extension: None,
+                    detected_at: None,
                 }
             }
         },
@@ -55,6 +63,10 @@ fn create_asset_info_unchecked(path: &PathBuf, category: logic::Category) -> log
                 from_sql: false,
                 from_rbx_storage: false,
                 category,
+                fingerprint: None,
+                file_type: None,
+                extension: None,
+                detected_at: None,
             }
         }
     }

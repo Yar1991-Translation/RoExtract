@@ -71,6 +71,10 @@ fn create_asset_info(hash: String, path: &PathBuf, category: logic::Category) ->
         from_sql: false,
         from_rbx_storage: true,
         category,
+        fingerprint: None,
+        file_type: None,
+        extension: None,
+        detected_at: None,
     }
 }
 
